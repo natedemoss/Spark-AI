@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI widget chatbot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: transparent !important;
+      -webkit-app-region: drag;
+    }
+    #chat-container {
+      transition: opacity 0.3s ease;
+    }
+    #chat-container.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #chat-output {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+    }
+    #help-panel {
+      display: none;
+      position: fixed;
+      top: 12px;
+      right: 4px;
+      width: 250px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body class="antialiased text-white">
+  <div id="chat-container" class="fixed top-0 left-0 right-0 mx-auto w-[800px] bg-black bg-opacity-50 rounded-b-lg shadow-lg flex flex-col p-2">
+    <div class="flex-1 overflow-y-auto mb-1" id="chat-output"></div>
+    <div class="flex items-center gap-2">
+      <input
+        type="text"
+        id="chat-input"
+        placeholder="Ask something..."
+        class="flex-1 bg-gray-800 bg-opacity-70 text-white placeholder-gray-400 rounded p-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        autocomplete="off"
+      />
+    </div>
+  </div>
+  <div id="help-panel">
+    <p class="mb-1">Ctrl + Shift + X = close/open widget</p>
+    <p class="mb-1">Ctrl + R = clear messages</p>
+  </div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    const fetch = require('node-fetch');
+    require('dotenv').config();
+
+    const GROQ_API_KEY = process.env.GROQ_API_KEY || 'YOUR_GROQ_API_KEY';
+    const chatContainer = document.getElementById('chat-container');
+    const chatOutput = document.getElementById('chat-output');
+    const chatInput = document.getElementById('chat-input');
+    const helpPanel = document.getElementById('help-panel');
+
+    const messageHistory = [
+      { role: 'system', content: 'You are a helpful assistant.' }
+    ];
+
+    ipcRenderer.on('toggle-visibility', () => {
+      console.log('Received toggle-visibility event');
+      chatContainer.classList.toggle('hidden');
+      helpPanel.style.display = 'none';
+    });
+
+    ipcRenderer.on('clear-chat', () => {
+      console.log('Received clear-chat event');
+      chatOutput.innerHTML = '';
+      messageHistory.length = 1;
+    });
+
+    chatInput.addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter' && chatInput.value.trim()) {
+        const userMessage = chatInput.value.trim();
+        console.log('User message entered:', userMessage);
+        appendMessage('You', userMessage);
+        chatInput.value = '';
+
+        // Add temporary "thinking..." message
+        const thinkingElement = appendMessage('AI', 'thinking...');
+
+        try {
+          const response = await getGroqResponse(userMessage);
+          console.log('Groq response:', response);
+          thinkingElement.innerHTML = `<strong>AI:</strong> ${response.replace(/\n/g, '<br>')}`;
+          resizeWindow();
+        } catch (error) {
+          console.error('Groq API error:', error);
+          thinkingElement.innerHTML = `<strong>AI:</strong> Error: Could not get response.`;
+          resizeWindow();
+        }
+      }
+    });
+
+    function appendMessage(sender, message) {
+      const messageDiv = document.createElement('div');
+      if (sender === 'You') {
+        messageDiv.className = 'text-blue-300 text-sm font-medium mb-1';
+      } else {
+        messageDiv.className = 'text-gray-100 text-base font-medium mb-1';
+      }
+      messageDiv.innerHTML = `<strong>${sender}:</strong> ${message.replace(/\n/g, '<br>')}`;
+      chatOutput.appendChild(messageDiv);
+      chatOutput.scrollTop = chatOutput.scrollHeight;
+      return messageDiv; // Return the element to modify later
+    }
+
+    function resizeWindow() {
+      const minHeight = 50;
+      const maxHeight = 400;
+      const contentHeight = chatOutput.scrollHeight + 60;
+      const newHeight = Math.min(Math.max(contentHeight, minHeight), maxHeight);
+      console.log('Resizing window to height:', newHeight);
+      ipcRenderer.send('resize-window', newHeight);
+    }
+
+    async function getGroqResponse(userMessage) {
+      messageHistory.push({ role: 'user', content: userMessage });
+
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: messageHistory,
+          max_tokens: 4000,
+          temperature: 0.7
+        })
+      });
+
+      const data = await response.json();
+      if (data.choices && data.choices[0]) {
+        const aiMessage = data.choices[0].message.content.trim();
+        messageHistory.push({ role: 'assistant', content: aiMessage });
+        return aiMessage;
+      }
+
+      throw new Error('No response from AI');
+    }
+  </script>
+</body>
+</html>
