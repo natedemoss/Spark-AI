@@ -1,0 +1,43 @@
+{
+  "name": "spark-ai",
+  "version": "4.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish always"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "electron": "^32.1.2",
+    "electron-builder": "^23.0.0",
+    "electron-reload": "^2.0.0-alpha.1"
+  },
+  "build": {
+    "appId": "com.natedemoss.sparkai",
+    "productName": "Spark AI",
+    "files": [
+      "icon.png",
+      "main.js",
+      "index.html",
+      "package.json"
+    ],
+    "directories": {
+      "output": "4.0.0"
+    },
+    "mac": {
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png"
+    }
+  }
+}
